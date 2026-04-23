@@ -1,0 +1,7 @@
+[package]
+name = "git-sign-proxy-protocol"
+version = "0.1.0"
+edition = "2021"
+
+# No external dependencies — only uses Rust's standard library.
+[dependencies]

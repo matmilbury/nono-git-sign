@@ -1,0 +1,14 @@
+[Unit]
+Description=Git signing proxy for nono-sandboxed agents
+Documentation=https://github.com/youruser/git-sign-proxy
+
+[Service]
+# %h expands to the user's home directory.
+ExecStart=%h/.cargo/bin/git-sign-proxy --port 21639 --key 1CD26C38E6D6D7E7
+Restart=on-failure
+RestartSec=5
+Environment=RUST_LOG=info
+
+[Install]
+# Start when the user logs in.
+WantedBy=default.target

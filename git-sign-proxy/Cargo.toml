@@ -1,0 +1,14 @@
+[package]
+name = "git-sign-proxy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+git-sign-proxy-protocol = { path = "../protocol" }
+# clap: command-line argument parser. "derive" feature lets us define args as a struct.
+clap = { version = "4", features = ["derive"] }
+# log + env_logger: standard Rust logging. Use RUST_LOG=info to control verbosity.
+log = "0.4"
+env_logger = "0.11"
+# nono: sandbox library. Restricts what the daemon process can access.
+nono = "0.40"

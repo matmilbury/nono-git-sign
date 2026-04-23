@@ -1,0 +1,9 @@
+# Cargo workspace — groups the daemon, client, and shared protocol crate.
+# "resolver = 2" is the modern dependency resolver (default for edition 2021+).
+[workspace]
+resolver = "2"
+members = [
+    "protocol",
+    "git-sign-proxy",
+    "git-sign-proxy-client",
+]
