@@ -11,7 +11,7 @@ sandbox                              host
 ┌──────────────────┐     TCP      ┌──────────────────┐
 │ git commit -S    │─────────────▶│ git-sign-proxy   │
 │   └─ gpg.program │  localhost   │   ├─ validate    │
-│      = git-sign- │   :21639    │   │  (hash-object)│
+│      = git-sign- │    :21639    │   │ (hash-object)│
 │        proxy-    │◀─────────────│   └─ gpg sign    │
 │        client    │  signature   │                   │
 └──────────────────┘              └──────────────────┘
