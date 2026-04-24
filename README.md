@@ -1,82 +1,85 @@
-# git-sign-proxy
+# nono-git-sign
 
-A localhost TCP proxy that lets [nono](https://nono.sh)-sandboxed processes create GPG-signed git commits without direct access to private key material.
+GPG-signed git commits from inside [nono](https://nono.sh) sandboxes.
 
-## Problem
+Sandboxed processes can't access `~/.gnupg`, so their commits show up as unverified. nono-git-sign fixes this: a daemon outside the sandbox holds the key and signs on behalf of the sandboxed process, after validating that the payload is a real git object.
 
-AI agents running in nono sandboxes can't access `~/.gnupg` (blocked by `deny_credentials`). But we want their git commits to be GPG-signed and show as "Verified" on GitHub.
+## How it works
 
-## How It Works
+```
+sandbox                              host
+┌──────────────────┐     TCP      ┌──────────────────┐
+│ git commit -S    │─────────────▶│ git-sign-proxy   │
+│   └─ gpg.program │  localhost   │   ├─ validate    │
+│      = git-sign- │   :21639    │   │  (hash-object)│
+│        proxy-    │◀─────────────│   └─ gpg sign    │
+│        client    │  signature   │                   │
+└──────────────────┘              └──────────────────┘
+```
 
-Two components:
+- **git-sign-proxy** — systemd user service that validates payloads with `git hash-object` and signs with `gpg`. Itself sandboxed with the nono SDK.
+- **git-sign-proxy-client** — drop-in `gpg.program` replacement. Reads stdin, sends to daemon, writes signature to stdout.
 
-- **`git-sign-proxy`** — daemon running as a systemd user service on `localhost:21639`. Has access to GPG keys. Validates that incoming payloads are real git commit/tag objects before signing them.
-- **`git-sign-proxy-client`** — tiny binary set as `gpg.program` inside the sandbox. Reads from stdin, sends to daemon over TCP, writes signature to stdout.
+## Usage
 
-The sandbox connects to the daemon via nono's `--open-port 21639`.
-
-## Security
-
-- Agent never accesses `~/.gnupg` or the gpg-agent socket
-- Daemon validates payloads are git commit/tag objects using `git hash-object`
-- Daemon process is itself sandboxed with the nono Rust SDK
-- Signing key is configured daemon-side only — agent can't choose a different key
-- All requests are logged to journald
-
-## Install
+### Install
 
 ```bash
 ./install.sh
 ```
 
-This builds both binaries, installs them to `~/.cargo/bin/`, and sets up the systemd user service.
+Builds release binaries, copies them to `~/.cargo/bin/`, and enables the systemd user service.
 
-## Usage
+Edit `systemd/git-sign-proxy.service` to set your GPG key ID before installing.
 
-The daemon runs automatically via systemd. In your sandbox launcher, add:
+### Configure the sandbox
+
+Allow the sandboxed process to reach the daemon:
 
 ```bash
 nono run --open-port 21639 ...
 ```
 
-And configure git in the sandboxed worktree:
+Inside the sandbox, point git at the proxy client:
 
 ```bash
 git config gpg.program git-sign-proxy-client
 ```
 
-### workon.nu Integration
+That's it. `git commit -S` now signs through the proxy.
 
-Three changes are needed in `~/.config/claude-agents/scripts/workon.nu`:
+### Daemon options
 
-1. **Service startup check** — before launching Claude, ensure the service is running:
-   ```nu
-   let proxy_status = (do { systemctl --user is-active git-sign-proxy.service } | complete)
-   if $proxy_status.exit_code != 0 {
-       print "Starting git-sign-proxy service..."
-       do { systemctl --user start git-sign-proxy.service } | complete
-   }
-   ```
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--port` | 21639 | TCP listen port |
+| `--key` | (required) | GPG key ID |
+| `--max-payload` | 1048576 | Max payload bytes |
 
-2. **Open port** — add `--open-port 21639` to the nono invocation
+The client reads `GIT_SIGN_PROXY_PORT` to override the default port.
 
-3. **Configure gpg.program** — after worktree creation:
-   ```nu
-   git -C $worktree_path config gpg.program git-sign-proxy-client
-   ```
-
-## Configuration
-
-Daemon flags (set in systemd unit file):
-- `--port <PORT>` — TCP port (default: 21639)
-- `--key <KEYID>` — GPG key ID (required)
-- `--max-payload <BYTES>` — max payload size (default: 1048576)
-
-Client env vars:
-- `GIT_SIGN_PROXY_PORT` — override daemon port (default: 21639)
-
-## Logs
+### Logs
 
 ```bash
 journalctl --user -u git-sign-proxy -f
 ```
+
+## Security
+
+- The sandboxed process never touches `~/.gnupg` or the gpg-agent socket
+- The daemon validates every payload is a genuine git commit or tag object before signing — arbitrary data is rejected
+- The signing key is configured daemon-side; the client can't choose a different key
+- The daemon process is itself Landlock-sandboxed via the nono SDK (filesystem + network restricted)
+
+## Building from source
+
+Requires Rust 1.70+.
+
+```bash
+cargo build --release
+cargo test
+```
+
+## License
+
+MIT
