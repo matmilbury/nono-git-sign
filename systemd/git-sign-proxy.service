@@ -1,6 +1,6 @@
 [Unit]
 Description=Git signing proxy for nono-sandboxed agents
-Documentation=https://github.com/youruser/git-sign-proxy
+Documentation=https://github.com/matmilbury/nono-git-sign
 
 [Service]
 # %h expands to the user's home directory.
